@@ -1,23 +1,34 @@
 from fastapi import FastAPI
+from app.security.security_headers import set_up_security_headers
+from app.security.cors import setup_cors
 from contextlib import asynccontextmanager
 from app.infrastructure.postgresql import engine, Base
+import app.models
+from app.apis import member_api
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 비동기 연결
     async with engine.begin() as conn:
-        pass
+        await conn.run_sync(Base.metadata.create_all)
+        print("PostgreSQL DB 연결 성공!")
 
     yield
 
 app = FastAPI(
+    lifespan=lifespan,
     title="Fast API Service",
     description="파이썬 백엔드 구축!",
     version="1.0.0",
-    doce_url="/docs",
+    docs_url="/docs", # 스웨거
     redoc_url="/redoc"
 )
+
+setup_cors(app)
+set_up_security_headers(app)
 
 @app.get("/")
 def health_check():
     return {"message": "Hello, World!"}
+
+app.include_router(member_api.router, prefix="/members", tags=["members"])
