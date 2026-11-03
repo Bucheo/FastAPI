@@ -40,4 +40,30 @@ Thumbs.db
 *.sqlite3
 *.log
 
-*.claude
+# Claude Code / graphify
+.claude/
+graphify-out/
+
+# 패키징 / 빌드 산출물
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# 테스트 / 도구 캐시
+.tox/
+.nox/
+.hypothesis/
+coverage.xml
+.ipynb_checkpoints/
+
+# 인증서 / 키 파일 (보안)
+*.pem
+*.key
+*.crt
+*.p12
+
+# 업로드 파일, 로컬 DB 덤프
+uploads/
+*.sql.bak
+*.dump
