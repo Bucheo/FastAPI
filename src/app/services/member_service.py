@@ -1,10 +1,13 @@
+import math
+
 from fastapi import Depends, HTTPException
 from app.repositories.member_repository import MemberRepository, get_member_repository
 from app.models.member_model import Member
+from app.schemas.common_schema import PageResponseDTO
 from app.schemas.member_schema import (
-    MemberCreateDTO
+    MemberCreateDTO, MemberClaimDTO, MemberResponseDTO, MemberUpdateDTO
 )
-
+from app.utils.security_util import get_password_hash, verify_password
 
 # 예외처리, 서비스가 들어나도록 이름을 선정해서 제작
 # 트랜잭션 관리
@@ -14,13 +17,108 @@ class MemberService:
         
     # 회원 이메일 중복확인
     async def check_duplicate_member(self, member_email: str, member_provider: str) -> None:
-        result = await self.repo.exists_member(member_email, member_provider)
+        result = await self.repo.exists_member_email_and_provider(member_email, member_provider)
         
         if result:
             raise HTTPException (
                 status_code = 409,
-                detail = "이밎 존재하는 이메일입니다."
+                detail = "이미 존재하는 이메일입니다."
+            )
+    
+    # 로컬 회원가입        
+    async def join(self, member: MemberCreateDTO) -> MemberClaimDTO:
+        # 중복 확인
+        await self.check_duplicate_member(member.member_email, member.member_provider)
+        
+        # 비밀번호 암호화
+        encryed_password = get_password_hash(member.member_password)
+        
+        # 암호화된 비밀번호 변경
+        new_member = MemberCreateDTO(
+            **member.model_dump(exclude={"member_password"}),
+            member_password=encryed_password
+        )
+        
+        return await self.repo.create_member(new_member)
+
+    
+    # 이런 식으로 가지고 올 수 있겠구나 정도만 확인하기
+    # 회원 조회
+    async def get_member_by_id(self, id: int):
+        found_member = await self.repo.find_member_by_id(id)
+        if not found_member:
+            raise HTTPException(
+                status_code = 404,
+                detail = "회원이 존재하지 않습니다."
+            )
+            
+        return MemberResponseDTO.model_validate(found_member)
+    
+
+    # 5. 회원 정보 조회(email, provider)
+    async def find_member_by_email(self, email: str, provider: str) -> MemberResponseDTO:
+        found_member = await self.repo.find_member_by_email(email, provider)
+        if not found_member:
+            raise HTTPException(
+                status_code = 404,
+                detail = "회원이 존재하지 않습니다."
             )
         
+        return MemberResponseDTO.model_validate(found_member)
+    
+    # 6. 회원 전체 정보 조회
+    async def get_member_all(self) -> list[MemberResponseDTO]:
+        members = await self.repo.find_member_all()
+        return [MemberResponseDTO.model_validate(m) for m in members]
+    
+    # 6-1
+    # 회원 전체 조회 + 페이지네이션
+    async def get_members_paging(self, offset: int, limit: int) -> PageResponseDTO:
+        current_page = offset
+        offset = (offset - 1) * limit
+
+        total_count = await self.repo.count_members()
+        members = await self.repo.find_member_by_paging(offset, limit)
+        total_pages = math.ceil(total_count / limit)
+        items_dto = [MemberResponseDTO.model_validate(member) for member in members]
+
+        return {
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "offset": current_page,
+            "limit": limit,
+            "items": items_dto
+        }
+        
+    # 7. 회원 정보 수정
+    async def update_member(self, id: int, member: MemberUpdateDTO):
+        exists_member = await self.repo.exists_member_by_id(id)
+        if not exists_member:
+            raise HTTPException(
+                status_code=404,
+                detail="회원을 찾을 수 없습니다."
+            )
+        
+        # dto -> dict
+        # exclud_unset=True: None 컬럼 모두 제거
+        update_data = member.model_dump(exclude_unset=True)
+        
+        if "member_password:" in update_data and update_data["member_password"]:
+            update_data["member_password"] = get_password_hash(update_data["member_password"])
+    
+        updated_member = await self.repo.update_member(id, update_data)
+        response_member = MemberResponseDTO.model_validate(updated_member)
+        return response_member
+    
+    # 8. 회원 삭제
+    async def withdraw(self, id: int):
+        is_deleted = await self.repo.withdraw(id)
+        
+        if not is_deleted:
+            raise HTTPException(
+                status_code=404,
+                detail="회원이 존재하지 않습니다."
+            )
+    
 def get_member_service(repo: MemberRepository = Depends(get_member_repository)):
     return MemberService(repo)
