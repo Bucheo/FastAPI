@@ -1,6 +1,7 @@
 from app.infrastructure.postgresql import get_postgresql_db
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import insert, select, update, delete, func, exists
 
 # 이 클래스가 메모리에 할당 될 때 자동으로 DB에 주입되어야하기 떄문에 생성자를 만들어줘야 한다.
 class DefaultRepository:
