@@ -4,7 +4,7 @@ from app.security.cors import setup_cors
 from contextlib import asynccontextmanager
 from app.infrastructure.postgresql import engine, Base
 import app.models
-from app.apis import member_api, post_api
+from app.apis import member_api, post_api, product_api
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,3 +33,4 @@ def health_check():
 
 app.include_router(member_api.router, prefix="/members", tags=["members"])
 app.include_router(post_api.router, prefix="/posts", tags=["posts"])
+app.include_router(product_api.router, prefix="/produsts", tags=["produsts"])
