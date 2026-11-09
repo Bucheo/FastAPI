@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from datetime import datetime
-
 from app.schemas.member_schema import MemberSummaryDTO
 
 # VO
@@ -13,7 +12,6 @@ class PostVO(BaseModel):
     post_created_at: datetime | None = None
     member_id: int
 
-    
 # DTO
 class PostCreateDTO(BaseModel):
     post_title: str
@@ -45,3 +43,7 @@ class PostListResponseDTO(BaseModel):
 
     class Config:
         from_attributes = True
+        
+class PostUpdateDTO(BaseModel):
+    post_title: str
+    post_content: str

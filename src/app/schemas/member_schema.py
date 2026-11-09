@@ -76,3 +76,12 @@ class MemberSummaryDTO(BaseModel):
 
     class Config:
         from_attributes = True
+        
+        
+class MemberClaimDTO(BaseModel):
+    id: int
+    member_email: str
+    member_provider: str
+    
+    class Config:
+        from_attributes = True

@@ -134,9 +134,34 @@ class PostRepository:
         
         return posts, total_count
     
-    
     # 게시글 수정
+    async def update_post(self, post_id: int, update_data: dict) -> int:
+        query = (
+            update(Post)
+            .values(
+                **update_data,
+                post_updated_at=func.now()
+            )
+            .where(Post.id == post_id)
+            .returning(Post.id)
+        )
+
+        result = await self.db.execute(query)
+        await self.db.commit()
+        updated_post_id = result.scalar_one_or_none()
+        return updated_post_id
+
+
     # 게시글 삭제
+    async def delete_post(self, post_id: int) -> bool:
+        query = (
+            delete(Post)
+                .where(Post.id == post_id)
+        )
+
+        result = await self.db.execute(query)
+        await self.db.commit()
+        return result.rowcount > 0
         
 # 주입 팩토리 메서드
 def get_post_repository(db: AsyncSession = Depends(get_postgresql_db)):

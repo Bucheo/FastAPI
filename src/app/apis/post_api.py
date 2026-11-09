@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import APIRouter, Query, Depends
 from app.services.post_service import get_post_service, PostService
-from app.schemas.post_schema import PostCreateDTO
+from app.schemas.post_schema import PostCreateDTO, PostUpdateDTO
 from app.schemas.common_schema import ApiResponseDTO
 from app.enums.post_enum import PostSortEnum, PostSearchEnum
 
@@ -100,6 +100,43 @@ async def search_posts(
     #     data=paged_posts
     # )
 
+@router.put(
+        "/{id}",
+        summary="게시글 수정",
+        response_model=ApiResponseDTO
+)
+async def edit_post(
+    id: int,
+    post: PostUpdateDTO,
+    post_service: PostService = Depends(get_post_service)
+):
+
+    updated_post_id = await post_service.edit_post(id, post)
+
+    return ApiResponseDTO(
+        success=True,
+        message= "게시글 수정 완료",
+        data={
+            "updated_post_id": updated_post_id
+        }
+    )
+
+
+@router.delete(
+    "/{id}",
+    summary="게시글 삭제",
+    response_model=ApiResponseDTO
+)
+async def remove_post(
+    id: int,
+    post_service: PostService = Depends(get_post_service)
+):
+    await post_service.remove_post(id)
+
+    return ApiResponseDTO(
+        success=True, 
+        message="게시글 삭제 완료."
+    )
 
 
 

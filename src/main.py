@@ -1,10 +1,13 @@
 from fastapi import FastAPI
+from app.infrastructure.redis import start_redis_client
 from app.security.security_headers import set_up_security_headers
 from app.security.cors import setup_cors
 from contextlib import asynccontextmanager
 from app.infrastructure.postgresql import engine, Base
 import app.models
-from app.apis import member_api, post_api, product_api
+from app.apis import auth_api, member_api, post_api, product_api
+
+from fastapi import Response
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -12,6 +15,9 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         print("PostgreSQL DB 연결 성공!")
+        
+    async with start_redis_client(app):
+        print("Redis 연결 성공!")
 
     yield
 
@@ -34,3 +40,4 @@ def health_check():
 app.include_router(member_api.router, prefix="/members", tags=["members"])
 app.include_router(post_api.router, prefix="/posts", tags=["posts"])
 app.include_router(product_api.router, prefix="/produsts", tags=["produsts"])
+app.include_router(auth_api.router, prefix="/auth", tags=["auth"])
