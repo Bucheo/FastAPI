@@ -24,7 +24,7 @@ async def check_member(
 
 
 @router.post("/join",
-    summary="로컬 회원 가입",
+    summary="회원 가입",
     response_model=ApiResponseDTO,
     responses={
         409: {
@@ -43,9 +43,10 @@ async def join(
     member: MemberCreateDTO, 
     member_service: MemberService = Depends(get_member_service)
 ):
-    pass
+    if not member.member_provider:
+        member.member_provider = MemberProvider.LOCAL.value
+        
     # provider는 controller 담당
-    member.member_provider = MemberProvider.LOCAL.value
     member_claim: MemberClaimDTO = await member_service.join(member)
 
     return ApiResponseDTO(
@@ -53,7 +54,6 @@ async def join(
         message="회원가입 성공",
         data=member_claim
     )
-
 
 # 5. 회원 정보 조회(email, provider)
 # 고정 경로(/search)는 /{id} 보다 위에 있어야 id로 해석되지 않는다.

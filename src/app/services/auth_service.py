@@ -18,7 +18,6 @@ TOKEN_BLACKLIST_PREFIX=os.getenv("TOKEN_BLACKLIST_PREFIX")
 # 예외처리
 # 트랜잭션 관리
 class AuthService:
-
     def __init__(
         self, 
         redis_repo: RedisRepository,
@@ -114,14 +113,42 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token
         )
-        
-         
     
     # 소셜 로그인
-    
-    
-    # 로그아웃
+    async def social_login(self, social_member: SocialLoginRequestDTO) -> JwtTokenDTO:
+        member_in_db = await self.member_service.get_member_by_email_provider(
+            social_member.member_email,
+            social_member.member_provider
+        )
+        
+        if not member_in_db:
+            return None
+        
+        member_id = member_in_db.id
+        claims = MemberClaimDTO(
+            id=member_id,
+            member_email=member_in_db.member_email,
+            member_provider=member_in_db.member_provider
+        )
 
+        access_token = generate_access_token(claims)
+        refresh_token = generate_refresh_token(claims)
+        
+        await self.save_refresh_token(member_id, refresh_token)
+        
+        return JwtTokenDTO(
+            access_token=access_token,
+            refresh_token=refresh_token
+        )
+
+    # 로그아웃
+    async def logout(self, member_id: int, tokens: JwtTokenDTO) -> None:
+        # 1. token -> decode -> 필수정보를 가져온다
+        # 2. 블랙리스트에 토큰(accessToken) 등록 
+        access_token = tokens.access_token
+        await self.save_blacklisted_token(access_token)
+        # 3. member_id가 필요 -> 토큰 삭제
+        await self.delete_refresh_token(member_id)
 
     # refresh -> access 재발급
 

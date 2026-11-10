@@ -1,9 +1,21 @@
+import os
+
+from dotenv import load_dotenv
 from fastapi import APIRouter, Query, Depends, Response
+from app.dependencies.auth_dependency import get_current_member, get_tokens
 from app.schemas.common_schema import ApiResponseDTO
 from app.schemas.member_schema import MemberClaimDTO
 from app.enums.member_enum import MemberProvider
 from app.schemas.auth_schema import JwtTokenDTO, LoginRequestDTO, SocialLoginRequestDTO
 from app.services.auth_service import AuthService, get_auth_service
+
+# 소셜로그인용
+import httpx
+from fastapi.responses import RedirectResponse # 페이지 전환
+from urllib.parse import urlencode # 요청주소를 조합하기 위한 라이브러리
+
+
+load_dotenv()
 
 router = APIRouter()
 
@@ -72,3 +84,156 @@ async def login(
         data=tokens
     )
 
+
+GOOGLE_AUTH_URL=os.getenv("GOOGLE_AUTH_URL")
+GOOGLE_TOKEN_URL=os.getenv("GOOGLE_TOKEN_URL")
+GOOGLE_USERINFO_URL=os.getenv("GOOGLE_USERINFO_URL")
+GOOGLE_CLIENT_ID=os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET=os.getenv("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI=os.getenv("GOOGLE_REDIRECT_URI")
+FRONT_END_URL=os.getenv("FRONT_END_URL")
+
+# 구글 로그인
+@router.get(
+    "/google",
+    summary="구글 로그인"
+)
+async def google_login():
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "consent"
+    }
+    
+    url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
+    return RedirectResponse(url)
+
+# 구글 콜백
+@router.get(
+    "/google/callback",
+    summary="구글 로그인 콜백"
+)
+async def goole_login_callback(
+    code: str,
+    response: Response,
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    async with httpx.AsyncClient() as client:
+        # 1. code -> 구글 access_token 발급
+        token_res = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_REDIRECT_URI,
+                "grant_type": "authorization_code"
+            }
+        )
+        token_data = token_res.json()
+        access_token = token_data.get("access_token")
+
+        # 2. access_token -> 구글 유저 정보 조회
+        user_res = await client.get(
+            GOOGLE_USERINFO_URL,
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        user = user_res.json()
+
+        user_params = {
+            "member_email": user.get("email"),
+            "member_provider": MemberProvider.GOOGLE.value,
+            "member_provider_id": user.get("sub")
+        }
+
+        social_member = SocialLoginRequestDTO.model_validate(user_params)
+        tokens = await auth_service.social_login(social_member)
+
+        # 비회원
+        # 3. 추가 회원가입 페이지로 이동 (pydantic -> dict 로 바꿔야 urlencode 가능)
+        if not tokens:
+            url = f"{FRONT_END_URL}/join-additional?{urlencode(user_params)}"
+            return RedirectResponse(url)
+
+        # 회원
+        access_token = tokens.access_token
+        refresh_token = tokens.refresh_token
+        
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=60*60*24
+        )
+
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=60*60*24
+        )
+
+        return RedirectResponse(url=FRONT_END_URL)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 로그아웃
+@router.post(
+    "/logout",
+    summary="로그아웃",
+    response_model=ApiResponseDTO,
+)
+async def logout(
+    response: Response,
+    member_claims: MemberClaimDTO = Depends(get_current_member),
+    tokens: JwtTokenDTO = Depends(get_tokens),
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    await auth_service.logout(member_claims.id, tokens)
+
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
+
+    return ApiResponseDTO(
+        success=True,
+        message="로그아웃 성공"
+    )
+    # Token -> Decode 후 로그아웃으로 전달
+    # 로그아웃 서비스 실행
+    # 화면 쿠키를 삭제
+    # 화면으로 ApiResponseDTO를 응답
