@@ -5,7 +5,7 @@ from app.repositories.member_repository import MemberRepository, get_member_repo
 from app.models.member_model import Member
 from app.schemas.common_schema import PageResponseDTO
 from app.schemas.member_schema import (
-    MemberCreateDTO, MemberClaimDTO, MemberResponseDTO, MemberUpdateDTO
+    MemberCreateDTO, MemberClaimDTO, MemberResponseDTO, MemberUpdateDTO, MemberProvider
 )
 from app.utils.security_util import get_password_hash, verify_password
 
@@ -31,7 +31,7 @@ class MemberService:
         await self.check_duplicate_member(member.member_email, member.member_provider)
         
         # 비밀번호 암호화
-        encryed_password = get_password_hash(member.member_password)
+        encryed_password = get_password_hash(member.member_password) if member.member_provider == MemberProvider.LOCAL.value else member.member_password
         
         # 암호화된 비밀번호 변경
         new_member = MemberCreateDTO(
@@ -60,10 +60,7 @@ class MemberService:
         found_member = await self.repo.find_member_by_email(email, provider)
 
         if not found_member:
-            raise HTTPException(
-                status_code=404,
-                detail="회원이 존재하지 않습니다."
-            )
+            return None
 
         return found_member
     
