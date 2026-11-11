@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, Response
+from app.dependencies.auth_dependency import get_current_member
 from app.services.member_service import get_member_service, MemberService
+from app.services.auth_service import AuthService, get_auth_service
+from app.schemas.auth_schema import SocialLoginRequestDTO
 from app.enums.member_enum import MemberProvider
 from app.schemas.member_schema import MemberCreateDTO, MemberClaimDTO, MemberResponseDTO, MemberUpdateDTO
 from app.schemas.common_schema import ApiResponseDTO
@@ -40,14 +43,43 @@ async def check_member(
 }
 )
 async def join(
-    member: MemberCreateDTO, 
-    member_service: MemberService = Depends(get_member_service)
+    member: MemberCreateDTO,
+    response: Response,
+    member_service: MemberService = Depends(get_member_service),
+    auth_service: AuthService = Depends(get_auth_service)
 ):
     if not member.member_provider:
         member.member_provider = MemberProvider.LOCAL.value
-        
+
     # provider는 controller 담당
     member_claim: MemberClaimDTO = await member_service.join(member)
+
+    # 소셜(구글/카카오) 추가 가입이면 가입 직후 바로 로그인 처리 -> 토큰을 쿠키로 전달
+    if member.member_provider != MemberProvider.LOCAL:
+        tokens = await auth_service.social_login(
+            SocialLoginRequestDTO(
+                member_email=member.member_email,
+                member_provider=member.member_provider,
+                member_provider_id=member.member_provider_id
+            )
+        )
+
+        response.set_cookie(
+            key="access_token",
+            value=tokens.access_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=60 * 60 * 24
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=tokens.refresh_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=60 * 60 * 24 * 30
+        )
 
     return ApiResponseDTO(
         success=True,
@@ -158,4 +190,24 @@ async def withdraw(
     return ApiResponseDTO(
         success=True,
         message="회원 삭제 성공"
+    )
+    
+# access_token -> 사용자를 전달하는 서비스
+
+@router.post(
+    "/me",
+    response_model=ApiResponseDTO,
+    summary="Access Token으로 회원정보 조회"
+)
+async def me(
+    current_member: MemberClaimDTO = Depends(get_current_member),
+    member_service: MemberService = Depends(get_member_service)
+):
+    member_id = current_member.id
+    found_member = await member_service.get_member_by_id(member_id)
+
+    return ApiResponseDTO(
+        success=True,
+        message="회원 정보 조회 완료",
+        data=found_member
     )
