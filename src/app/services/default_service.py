@@ -12,5 +12,5 @@ class DefaultService:
 
 
 # 레포지토리 주입 팩토리 함수
-def get_defautl_service(repo: DefaultRepository = Depends(get_default_repository)):
+def get_default_service(repo: DefaultRepository = Depends(get_default_repository)):
     return DefaultService(repo)

@@ -101,7 +101,7 @@ class MemberService:
         # exclud_unset=True: None 컬럼 모두 제거
         update_data = member.model_dump(exclude_unset=True)
         
-        if "member_password:" in update_data and update_data["member_password"]:
+        if "member_password" in update_data and update_data["member_password"]:
             update_data["member_password"] = get_password_hash(update_data["member_password"])
     
         updated_member = await self.repo.update_member(id, update_data)

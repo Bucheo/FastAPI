@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Query, Depends, Response
+from fastapi import APIRouter, Form, Query, Depends, Response, UploadFile, File
 from app.dependencies.auth_dependency import get_current_member
+from app.schemas.s3_schema import ImageUploadResponseDTO
 from app.services.member_service import get_member_service, MemberService
 from app.services.auth_service import AuthService, get_auth_service
+from app.enums.member_enum import MemberProvider
+from app.enums.s3_enum import S3Folder
+from app.services.s3_service import get_s3_service, S3Service
 from app.schemas.auth_schema import SocialLoginRequestDTO
 from app.enums.member_enum import MemberProvider
 from app.schemas.member_schema import MemberCreateDTO, MemberClaimDTO, MemberResponseDTO, MemberUpdateDTO
@@ -159,23 +163,35 @@ async def get_member_by_id(
 
 
 @router.put(
-    "/{id}",
+    "/{id}/profile",
     summary="회원 정보 수정",
     response_model=ApiResponseDTO
 )
-async def update_member(
+async def update_profile(
     id: int,
-    member: MemberUpdateDTO,
+    file: UploadFile = File(...),
+    folder: S3Folder = Form(...),
+    s3_service: S3Service = Depends(get_s3_service),
     member_service: MemberService = Depends(get_member_service)
 ):
-    updated_member = await member_service.update_member(id, member)
+    result: ImageUploadResponseDTO = await s3_service.upload_image_with_thumbnail(
+        file=file,
+        folder=folder.value
+    )
     
-    return ApiResponseDTO(
-        success=True,
-        message="회원 조회 성공",
-        data=updated_member
+    original_url = result.original_url
+    member_update_dto = MemberUpdateDTO(
+        member_profile=original_url
     )
 
+    updated_member = await member_service.update_member(id, member_update_dto)
+
+    return ApiResponseDTO(
+        success=True,
+        message="프로필 수정 완료",
+        data=updated_member
+    )
+    
 @router.delete(
     "/{id}",
     summary="회원 정보 삭제",
