@@ -5,8 +5,8 @@ from app.security.cors import setup_cors
 from contextlib import asynccontextmanager
 from app.infrastructure.postgresql import engine, Base
 from app.infrastructure.s3 import start_s3_client
-from app.apis import auth_api, member_api, post_api, product_api, s3_api
-
+from app.apis import auth_api, member_api, post_api, product_api, s3_api, ai_api
+from app.services.ai_service import ai_service_instance
 from fastapi import Response
 
 @asynccontextmanager
@@ -21,6 +21,10 @@ async def lifespan(app: FastAPI):
         
         async with start_s3_client(app):
             print("S3 연결 성공")
+            
+        # 4. 전이학습 모델 로드
+        ai_service_instance.load_alexnet_model()
+        print("Alexnet 모델 로드 성공")
 
     yield
 
@@ -45,3 +49,4 @@ app.include_router(post_api.router, prefix="/posts", tags=["posts"])
 app.include_router(product_api.router, prefix="/produsts", tags=["produsts"])
 app.include_router(auth_api.router, prefix="/auth", tags=["auth"])
 app.include_router(s3_api.router, prefix="/uploads", tags=["uploads"])
+app.include_router(ai_api.router, prefix="/ai", tags=["ai"])
