@@ -67,3 +67,6 @@ coverage.xml
 uploads/
 *.sql.bak
 *.dump
+
+# conda 환경 파일 (로컬 전용)
+environment.yaml
